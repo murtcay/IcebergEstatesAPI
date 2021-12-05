@@ -5,12 +5,17 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 5000;
 
+//error handler
+const notFoundMiddleware = require('./middleware/not-found');
+
 app.use(express.json());
 
 // routes
 app.get('/api/v1', (req, res) => {
   res.send('Iceberg Estates API');
 });
+
+app.use(notFoundMiddleware);
 
 const startServer = async () => {
   try {

@@ -8,6 +8,9 @@ const port = process.env.PORT || 5000;
 
 // rest of the packages
 
+// database
+const connectDB = require('./db/connect');
+
 // routes
 const authRouter = require('./routes/authRouter');
 
@@ -24,6 +27,8 @@ app.use(errorHandlerMiddleware);
 
 const startServer = async () => {
   try {
+    await connectDB(process.env.MONGO_URL);
+    console.log('CONNECTED TO DB!!!');
     app.listen(port, console.log(`Server is listening on port: ${port}...`));
   } catch (error) {
     console.log(error);

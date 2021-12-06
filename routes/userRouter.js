@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router()
+const router = express.Router();
 
 const {
   getAllUsers,
@@ -8,9 +8,11 @@ const {
   updateUserPassword
 } = require('../controllers/userController');
 
-router.route('/').get(getAllUsers);
+const { authenticatUser } = require('../middleware/authentication');
+
+router.route('/').get(authenticatUser, getAllUsers);
 router.route('/updateUser').patch(updateUser);
 router.route('/updateUserPassword').patch(updateUserPassword);
-router.route('/:id').get(getSingleUser);
+router.route('/:id').get(authenticatUser, getSingleUser);
 
 module.exports = router;

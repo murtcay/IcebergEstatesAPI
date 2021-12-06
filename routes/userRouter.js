@@ -8,9 +8,12 @@ const {
   updateUserPassword
 } = require('../controllers/userController');
 
-const { authenticatUser } = require('../middleware/authentication');
+const { 
+  authenticatUser,
+  authorizePermissions
+} = require('../middleware/authentication');
 
-router.route('/').get(authenticatUser, getAllUsers);
+router.route('/').get(authenticatUser, authorizePermissions('admin'), getAllUsers);
 router.route('/updateUser').patch(updateUser);
 router.route('/updateUserPassword').patch(updateUserPassword);
 router.route('/:id').get(authenticatUser, getSingleUser);

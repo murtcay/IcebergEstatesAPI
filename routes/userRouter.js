@@ -13,7 +13,7 @@ const {
   authorizePermissions
 } = require('../middleware/authentication');
 
-router.route('/').get(authenticatUser, authorizePermissions('admin'), getAllUsers);
+router.route('/').get([authenticatUser, authorizePermissions('admin')], getAllUsers);
 router.route('/updateUser').patch(authenticatUser, updateUser);
 router.route('/updateUserPassword').patch(authenticatUser, updateUserPassword);
 router.route('/:id').get(authenticatUser, getSingleUser);

@@ -8,9 +8,14 @@ const {
   updateContact
 } = require('../controllers/contactController');
 
-router.get('/', getAllContacts);
-router.post('/', createContact)
-router.get('/:id', getSingleContact);
-router.put('/:id', updateContact);
+const {
+  authenticatUser,
+  authorizePermissions
+} = require('../middleware/authentication');
+
+router.get('/', [authenticatUser, authorizePermissions('admin')], getAllContacts);
+router.post('/', [authenticatUser, authorizePermissions('admin')], createContact)
+router.get('/:id', [authenticatUser, authorizePermissions('admin')], getSingleContact);
+router.put('/:id', [authenticatUser, authorizePermissions('admin')], updateContact);
 
 module.exports = router;

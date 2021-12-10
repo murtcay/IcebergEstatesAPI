@@ -30,4 +30,9 @@ const ContactSchema = new mongoose.Schema({
   }
 });
 
+ContactSchema.methods.informationCheck = function (candidateInfo, key) {
+  const isMatch = candidateInfo === this[key];
+  return isMatch;
+}
+
 module.exports = mongoose.model('Contact', ContactSchema);

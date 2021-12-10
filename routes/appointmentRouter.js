@@ -8,11 +8,15 @@ const {
   deleteAppointment
 } = require('../controllers/appointmentController');
 
-router.route('/').get(getAllAppointments);
-router.route('/').post(createAppointment);
-router.route('/:id').get(getSingleAppointment);
-router.route('/:id').patch(updateAppointment);
-router.route('/:id').delete(deleteAppointment);
+const { 
+  authenticatUser
+} = require('../middleware/authentication');
+
+router.route('/').get(authenticatUser, getAllAppointments);
+router.route('/').post(authenticatUser, createAppointment);
+router.route('/:id').get(authenticatUser, getSingleAppointment);
+router.route('/:id').patch(authenticatUser, updateAppointment);
+router.route('/:id').delete(authenticatUser, deleteAppointment);
 
 
 module.exports = router;

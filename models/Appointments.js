@@ -23,11 +23,11 @@ const AppointmentSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please provide distance.']
   },
-  estimatedArrivalTime: {
+  estimatedLeaveTime: {
     type: Date,
     required: true
   },
-  estimatedDepartureTime: {
+  estimatedAvailableTime: {
     type: Date,
     required: true
   },

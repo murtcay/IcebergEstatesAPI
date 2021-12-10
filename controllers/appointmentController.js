@@ -1,7 +1,12 @@
 const axios = require('axios');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
+const Appointment = require('../models/Appointments');
 const Contact = require('../models/Contact');
+
+const {
+  checkPermissions
+} = require('../utils');
 
 const createAppointment = async (req, res) => { 
     const {
@@ -43,13 +48,37 @@ const createAppointment = async (req, res) => {
       throw new CustomError.BadRequestError(customerContact.error)
     }
 
-    res.status(200).json(req.body);
- 
+    // Appointment Creation Part, working on the scenario 
 
+    res.status(200).json(req.body);
+ };
+
+const getAllAppointments = async (req, res) => { 
+  const queryObj = {};
+
+  if(req.user.role !== 'admin') {
+    queryObj.creator = req.user.userId;
+  }
+
+  const appointments = await Appointment.find(queryObj).populate('customer');
+
+  res.status(StatusCodes.OK).json({ appointments });
 };
-const getAllAppointments = async (req, res) => { res.send('Get all appointments');};
-const getSingleAppointment = async (req, res) => { res.send('Get single appointment');};
+
+const getSingleAppointment = async (req, res) => { 
+
+  const appointment = await Appointment.findOne({_id: req.params.id}).populate('customer');
+
+  if(!appointment) {
+    throw new CustomError.BadRequestError(`No appointment with id: ${req.params.id}`);
+  }
+
+  checkPermissions(req.user, appointment.creator);
+  res.status(StatusCodes.OK).json({ appointment });
+};
+
 const updateAppointment = async (req, res) => { res.send('Update appointment');};
+
 const deleteAppointment = async (req, res) => { res.send('Delete appointment');};
 
 const getAppointmentCustomerContactInfo = async ({customer}) => {

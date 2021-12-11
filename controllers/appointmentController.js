@@ -8,6 +8,12 @@ const {
   checkPermissions
 } = require('../utils');
 
+const {
+  getDistanceAndTime,
+  getLatitudeLongitude,
+  postcodeValidate
+} = require('../utils/location');
+
 const createAppointment = async (req, res) => { 
     const {
       address, 
@@ -30,14 +36,7 @@ const createAppointment = async (req, res) => {
 
     const postcode = address.toLowerCase();
     
-    const {data: isValidPostcode} = await axios({
-      method: 'get',
-      url: `${process.env.POSTCODE_API_HOST}/postcodes/${postcode}/validate`
-    });
-   
-    if(!isValidPostcode.result) {
-      throw new CustomError.BadRequestError('Postcode is not valid.');
-    }
+    await postcodeValidate(postcode);
 
     // Get Appointment Customer Contact Information
     const customerContact = await getAppointmentCustomerContactInfo({
@@ -50,7 +49,63 @@ const createAppointment = async (req, res) => {
 
     // Appointment Creation Part, working on the scenario 
 
-    res.status(200).json(req.body);
+    const lastAppointmentInGivenDate = await Appointment.find({date: new Date(date)})
+      .sort('-estimatedAvailableTime')
+      .limit(1);
+
+    let lastAvailableTime = null;
+
+    if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
+      lastAvailableTime = new Date(Date.now()).getTime()
+    }
+    else {
+      lastAvailableTime = lastAppointmentInGivenDate.getTime();
+    }
+
+    const locationString = await getLatitudeLongitude(['cm27pj', postcode]);
+
+    const office = locationString['cm27pj'].split(',').join('%2C');
+    const appointmentPlace = locationString[postcode].split(',').join('%2C');
+
+    const offsetTime = 15 * 60; // 15 minutes;
+    const leaveTimeFromOffice = offsetTime + Math.floor( lastAvailableTime / 1000); // time in seconds
+    const appointmentDuration = 60 * 60; // 1 hour in seconds
+
+    const departure = await getDistanceAndTime({ 
+      origin: office, 
+      destination: appointmentPlace, 
+      departureTime: leaveTimeFromOffice
+    });
+
+    const arrival = await getDistanceAndTime({
+      origin: appointmentPlace,
+      destination: office,
+      departureTime: (leaveTimeFromOffice + departure.duration + appointmentDuration)
+    });
+
+    const availableTimeAtOffice = (leaveTimeFromOffice + departure.duration + appointmentDuration + arrival.duration);
+
+    const appointment = await Appointment.create({
+      address,
+      date: new Date(date),
+      creator: req.user.userId,
+      customer: customerContact.contact._id,
+      distance: departure.distance.text,
+      estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
+      estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
+    });
+
+    res.status(200).json({
+      lastAvailableTime,
+      locationString,
+      office,
+      appointmentPlace,
+      leaveTimeFromOffice,
+      availableTimeAtOffice,
+      departure,
+      arrival,
+      appointment
+    });
  };
 
 const getAllAppointments = async (req, res) => { 

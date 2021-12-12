@@ -69,7 +69,7 @@ const createAppointment = async (req, res) => {
 
     let lastAvailableTime = null;
     const shiftBegin = `${date}T08:00:00.000Z`;
-    const shiftEnd = `${date}T21:30:00.000Z`;
+    const shiftEnd = `${date}T23:59:59.000Z`;
 
     if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
       lastAvailableTime = new Date(shiftBegin).getTime()

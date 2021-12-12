@@ -27,15 +27,29 @@ const createAppointment = async (req, res) => {
     if(!address || !date || !first_name || !last_name || !email || !phone) {
       throw new CustomError.BadRequestError('Please provide all values.');
     }
-
-    // Validate a postcode
-    const regEx = /^[a-zA-Z0-9]+$/;
-    if(!regEx.test(address)) {
-      throw new CustomError.BadRequestError('Postcode is not validx.');
+    
+    // Validate appointment date
+    if(isNaN(new Date(date).getTime())) {
+      throw new CustomError.BadRequestError('Invalid date format. Format must be yyyy-mm-dd');
     }
 
+    let today = new Date();
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const appointmentDate = new Date(date);
+
+    if(appointmentDate.getTime() < today.getTime()) {
+      throw CustomError.BadRequestError('You cannot create an appointment with a past date.')
+    }
+
+    // Validate a postcode
     const postcode = address.toLowerCase();
-    
+    const regEx = /^[a-zA-Z0-9]+$/;
+
+    if(!regEx.test(postcode)) {
+      throw new CustomError.BadRequestError('Postcode is not valid.');
+    }
+
     await postcodeValidate(postcode);
 
     // Get Appointment Customer Contact Information
@@ -48,18 +62,21 @@ const createAppointment = async (req, res) => {
     }
 
     // Appointment Creation Part, working on the scenario 
-
-    const lastAppointmentInGivenDate = await Appointment.find({date: new Date(date)})
-      .sort('-estimatedAvailableTime')
-      .limit(1);
+    const lastAppointmentInGivenDate = await Appointment.find({
+      date: appointmentDate,
+      creator: req.user.userId
+    }).sort('-estimatedAvailableTime').limit(1);
 
     let lastAvailableTime = null;
+    const shiftBegin = `${date}T08:00:00.000Z`;
+    const shiftEnd = `${date}T21:30:00.000Z`;
 
     if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
-      lastAvailableTime = new Date(Date.now()).getTime()
+      lastAvailableTime = new Date(shiftBegin).getTime()
     }
     else {
-      lastAvailableTime = lastAppointmentInGivenDate.getTime();
+      lastAvailableTime = lastAppointmentInGivenDate[0].estimatedAvailableTime;
+      lastAvailableTime = lastAvailableTime.getTime();
     }
 
     const locationString = await getLatitudeLongitude(['cm27pj', postcode]);
@@ -85,26 +102,49 @@ const createAppointment = async (req, res) => {
 
     const availableTimeAtOffice = (leaveTimeFromOffice + departure.duration + appointmentDuration + arrival.duration);
 
+    const shiftEndingTime = new Date(shiftEnd).getTime();
+    
+    if((availableTimeAtOffice*1000) > shiftEndingTime) {
+      throw new CustomError.BadRequestError('Date is not available for appointment. Please choose another date.');
+    }
+
+    // Check is there a pending appointment for the customer and address
+    const pendingAppointment = await Appointment.findOne({
+      address,
+      customer: customerContact.contact._id,
+      status: 'pending'
+    });
+    
+    if(pendingAppointment) {
+      if(pendingAppointment.creator.toString() === req.user.userId.toString()) {
+        throw new CustomError.BadRequestError('An appointment is already exists.');
+      }
+      else {
+        throw new CustomError.BadRequestError('An appointment is already created by another user.');
+      }
+    }
+
     const appointment = await Appointment.create({
       address,
-      date: new Date(date),
+      date: appointmentDate,
       creator: req.user.userId,
       customer: customerContact.contact._id,
       distance: departure.distance.text,
       estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
       estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
     });
-
+    
     res.status(200).json({
-      lastAvailableTime,
-      locationString,
-      office,
-      appointmentPlace,
-      leaveTimeFromOffice,
-      availableTimeAtOffice,
-      departure,
-      arrival,
-      appointment
+      appointment: {
+        address: appointment.address,
+        date: appointment.date,
+        customer: {
+          first_name, last_name, email, phone
+        },
+        distance: appointment.distance,
+        estimatedLeaveTime: appointment.estimatedLeaveTime,
+        estimatedAvailableTime: appointment.estimatedAvailableTime
+      }
     });
  };
 

@@ -9,15 +9,15 @@ const {
 } = require('../controllers/appointmentController');
 
 const { 
-  authenticatUser,
+  authenticateUser,
   authorizePermissions
 } = require('../middleware/authentication');
 
-router.route('/').get(authenticatUser, getAllAppointments);
-router.route('/').post(authenticatUser, authorizePermissions('user'), createAppointment);
-router.route('/:id').get(authenticatUser, getSingleAppointment);
-router.route('/:id').patch(authenticatUser, updateAppointment);
-router.route('/:id').delete(authenticatUser, deleteAppointment);
+router.route('/').get(authenticateUser, getAllAppointments);
+router.route('/').post(authenticateUser, authorizePermissions('user'), createAppointment);
+router.route('/:id').get(authenticateUser, getSingleAppointment);
+router.route('/:id').patch(authenticateUser, updateAppointment);
+router.route('/:id').delete(authenticateUser, deleteAppointment);
 
 
 module.exports = router;

@@ -1,7 +1,7 @@
 const CustomError = require('../errors');
 const { isTokenValid } = require('../utils'); 
 
-const authenticatUser = async (req, res, next) => {
+const authenticateUser = async (req, res, next) => {
   const token = req.signedCookies.token;
   
   if(!token) {
@@ -27,6 +27,6 @@ const authorizePermissions = (...roles) => {
 };
 
 module.exports = {
-  authenticatUser,
+  authenticateUser,
   authorizePermissions
 };

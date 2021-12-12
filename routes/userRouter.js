@@ -9,13 +9,13 @@ const {
 } = require('../controllers/userController');
 
 const { 
-  authenticatUser,
+  authenticateUser,
   authorizePermissions
 } = require('../middleware/authentication');
 
-router.route('/').get([authenticatUser, authorizePermissions('admin')], getAllUsers);
-router.route('/updateUser').patch(authenticatUser, updateUser);
-router.route('/updateUserPassword').patch(authenticatUser, updateUserPassword);
-router.route('/:id').get(authenticatUser, getSingleUser);
+router.route('/').get([authenticateUser, authorizePermissions('admin')], getAllUsers);
+router.route('/updateUser').patch(authenticateUser, updateUser);
+router.route('/updateUserPassword').patch(authenticateUser, updateUserPassword);
+router.route('/:id').get(authenticateUser, getSingleUser);
 
 module.exports = router;

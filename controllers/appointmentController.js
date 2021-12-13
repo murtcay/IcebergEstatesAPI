@@ -149,13 +149,90 @@ const createAppointment = async (req, res) => {
  };
 
 const getAllAppointments = async (req, res) => { 
+  const { year:reqYear, month, date, sort } = req.query;
   const queryObj = {};
+  const today = new Date();
+  let dateFilter = {};
+
+  if(reqYear){
+    let year = reqYear; 
+    if((year.length !== 4) || (Number(year) < 0)) {
+      year = today.getFullYear();
+    }
+    if(month && month.length === 2 && (Number(month) < 13) && (Number(month) > 0)) {
+      if(date && date.length === 2 && (Number(date) < 31) && (Number(date) > 0)) {
+        if(Date.parse(`${year}-${month}-${date}`)) {
+          dateFilter = {
+            $eq: new Date(`${year}-${month}-${date}`)
+          };
+        }
+      }
+      else {
+        if(Number(month) === 12) {
+          dateFilter = {
+          $gte: new Date(`${year}-${month}`),
+          $lt: new Date(`${Number(year)+1}-01`)
+          };
+        }
+        else {
+          dateFilter = {
+            $gte: new Date(`${year}-${month}`),
+            $lt: new Date(`${year}-${Number(month)+1}`)
+          };
+        }
+      }
+    }
+    else {
+      dateFilter = {
+        $gte: new Date(`${year}`),
+        $lt: new Date(`${Number(year)+1}`)
+      };
+    }
+  }
+  else {
+    if(month && month.length === 2 && (Number(month) < 13) && (Number(month) > 0)) {
+      let year = today.getFullYear();
+      if(date && date.length === 2 && (Number(date) < 31) && (Number(date) > 0)) {
+        if(Date.parse(`${year}-${month}-${date}`)) {
+          dateFilter = {
+            $eq: new Date(`${year}-${month}-${date}`)
+          };
+        }
+      }
+      else {
+        if(Number(month) === 12) {
+          dateFilter = {
+            $gte: new Date(`${year}-${month}`),
+            $lt: new Date(`${Number(year)+1}-01`)
+          };
+        }
+        else {
+          dateFilter = {
+            $gte: new Date(`${year}-${month}`),
+            $lt: new Date(`${year}-${Number(month)+1}`)
+          };
+        }
+      }
+    }
+  }
+
+  if (Object.keys(dateFilter).length !== 0) {
+    queryObj.date = dateFilter;
+  }
 
   if(req.user.role !== 'admin') {
     queryObj.creator = req.user.userId;
   }
 
-  const appointments = await Appointment.find(queryObj).populate('customer');
+  let sortAvailableTime = '-estimatedAvailableTime';
+  if(sort && (sort.toLowerCase() === 'asc')) {
+    sortAvailableTime = 'estimatedAvailableTime';
+  }
+
+  const appointments = await Appointment.find(queryObj)
+    .populate('customer', '-_id first_name last_name email phone')
+    .select('-_id -creator -createdAt -__v')
+    .sort(sortAvailableTime);
 
   res.status(StatusCodes.OK).json({ appointments });
 };

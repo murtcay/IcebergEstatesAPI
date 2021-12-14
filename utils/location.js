@@ -69,7 +69,7 @@ const postcodeValidate = async (postcode) => {
   })
 
   if(!isValid.result) {
-    throw new CustomError.BadRequestError(`Postcode: ${postcode} is not validx.`);
+    throw new CustomError.BadRequestError(`Postcode: ${postcode} is not valid.`);
   }
 };
 

@@ -3,7 +3,7 @@ const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const Appointment = require('../models/Appointments');
 const Contact = require('../models/Contact');
-
+const OFFICE_CODE = 'cm27pj';
 const {
   checkPermissions
 } = require('../utils');
@@ -15,138 +15,90 @@ const {
 } = require('../utils/location');
 
 const createAppointment = async (req, res) => { 
-    const {
-      address, 
-      date, 
-      first_name, 
-      last_name, 
-      email, 
-      phone
-    } = req.body;
+  const {
+    address, 
+    date, 
+    first_name, 
+    last_name, 
+    email, 
+    phone
+  } = req.body;
+
+  if(!address || !date || !first_name || !last_name || !email || !phone) {
+    throw new CustomError.BadRequestError('Please provide all values.');
+  }
   
-    if(!address || !date || !first_name || !last_name || !email || !phone) {
-      throw new CustomError.BadRequestError('Please provide all values.');
-    }
-    
-    // Validate appointment date
-    if(isNaN(new Date(date).getTime())) {
-      throw new CustomError.BadRequestError('Invalid date format. Format must be yyyy-mm-dd');
-    }
+  let today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  // Validate a postcode
+  const postcode = address.toLowerCase();
+  const regEx = /^[a-zA-Z0-9]+$/;
 
-    let today = new Date();
-    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if(!regEx.test(postcode)) {
+    throw new CustomError.BadRequestError('Postcode is not valid.');
+  }
 
-    const appointmentDate = new Date(date);
+  await postcodeValidate(postcode);
 
-    if(appointmentDate.getTime() < today.getTime()) {
-      throw CustomError.BadRequestError('You cannot create an appointment with a past date.')
-    }
+  // Get Appointment Customer Contact Information
+  const customerContact = await getAppointmentCustomerContactInfo({
+    customer: { first_name, last_name, email, phone }
+  });
 
-    // Validate a postcode
-    const postcode = address.toLowerCase();
-    const regEx = /^[a-zA-Z0-9]+$/;
+  if(!customerContact.status) {
+    throw new CustomError.BadRequestError(customerContact.error)
+  }
 
-    if(!regEx.test(postcode)) {
-      throw new CustomError.BadRequestError('Postcode is not valid.');
-    }
+  // Appointment Creation Part, working on the scenario 
+  const calcResult = await appointmentCalculation({
+    date, 
+    today, 
+    user:req.user, 
+    appointmentId: null, 
+    appointmentAdress: postcode
+  });
 
-    await postcodeValidate(postcode);
-
-    // Get Appointment Customer Contact Information
-    const customerContact = await getAppointmentCustomerContactInfo({
-      customer: { first_name, last_name, email, phone }
-    });
-
-    if(!customerContact.status) {
-      throw new CustomError.BadRequestError(customerContact.error)
-    }
-
-    // Appointment Creation Part, working on the scenario 
-    const lastAppointmentInGivenDate = await Appointment.find({
-      date: appointmentDate,
-      creator: req.user.userId
-    }).sort('-estimatedAvailableTime').limit(1);
-
-    let lastAvailableTime = null;
-    const shiftBegin = `${date}T08:00:00.000Z`;
-    const shiftEnd = `${date}T23:59:59.000Z`;
-
-    if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
-      lastAvailableTime = new Date(shiftBegin).getTime()
+  // Check is there a pending appointment for the customer and address
+  const pendingAppointment = await Appointment.findOne({
+    address: postcode,
+    customer: customerContact.contact._id,
+    status: 'pending'
+  });
+  
+  if(pendingAppointment) {
+    if(pendingAppointment.creator.toString() === req.user.userId.toString()) {
+      throw new CustomError.BadRequestError('An appointment is already exists.');
     }
     else {
-      lastAvailableTime = lastAppointmentInGivenDate[0].estimatedAvailableTime;
-      lastAvailableTime = lastAvailableTime.getTime();
+      throw new CustomError.BadRequestError('An appointment is already created by another user.');
     }
+  }
 
-    const locationString = await getLatitudeLongitude(['cm27pj', postcode]);
-
-    const office = locationString['cm27pj'].split(',').join('%2C');
-    const appointmentPlace = locationString[postcode].split(',').join('%2C');
-
-    const offsetTime = 15 * 60; // 15 minutes;
-    const leaveTimeFromOffice = offsetTime + Math.floor( lastAvailableTime / 1000); // time in seconds
-    const appointmentDuration = 60 * 60; // 1 hour in seconds
-
-    const departure = await getDistanceAndTime({ 
-      origin: office, 
-      destination: appointmentPlace, 
-      departureTime: leaveTimeFromOffice
-    });
-
-    const arrival = await getDistanceAndTime({
-      origin: appointmentPlace,
-      destination: office,
-      departureTime: (leaveTimeFromOffice + departure.duration + appointmentDuration)
-    });
-
-    const availableTimeAtOffice = (leaveTimeFromOffice + departure.duration + appointmentDuration + arrival.duration);
-
-    const shiftEndingTime = new Date(shiftEnd).getTime();
-    
-    if((availableTimeAtOffice*1000) > shiftEndingTime) {
-      throw new CustomError.BadRequestError('Date is not available for appointment. Please choose another date.');
+  const appointment = await Appointment.create({
+    address: postcode,
+    date: calcResult.date,
+    creator: req.user.userId,
+    customer: customerContact.contact._id,
+    distance: calcResult.distance,
+    estimatedLeaveTime: calcResult.estimatedLeaveTime,
+    estimatedAvailableTime: calcResult.estimatedAvailableTime
+  });
+  
+  res.status(200).json({
+    appointment: {
+      id: appointment._id,
+      address: appointment.address,
+      date: appointment.date,
+      customer: {
+        first_name, last_name, email, phone
+      },
+      distance: appointment.distance,
+      estimatedLeaveTime: appointment.estimatedLeaveTime,
+      estimatedAvailableTime: appointment.estimatedAvailableTime
     }
-
-    // Check is there a pending appointment for the customer and address
-    const pendingAppointment = await Appointment.findOne({
-      address,
-      customer: customerContact.contact._id,
-      status: 'pending'
-    });
-    
-    if(pendingAppointment) {
-      if(pendingAppointment.creator.toString() === req.user.userId.toString()) {
-        throw new CustomError.BadRequestError('An appointment is already exists.');
-      }
-      else {
-        throw new CustomError.BadRequestError('An appointment is already created by another user.');
-      }
-    }
-
-    const appointment = await Appointment.create({
-      address,
-      date: appointmentDate,
-      creator: req.user.userId,
-      customer: customerContact.contact._id,
-      distance: departure.distance.text,
-      estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
-      estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
-    });
-    
-    res.status(200).json({
-      appointment: {
-        address: appointment.address,
-        date: appointment.date,
-        customer: {
-          first_name, last_name, email, phone
-        },
-        distance: appointment.distance,
-        estimatedLeaveTime: appointment.estimatedLeaveTime,
-        estimatedAvailableTime: appointment.estimatedAvailableTime
-      }
-    });
- };
+  });
+};
 
 const getAllAppointments = async (req, res) => { 
   const { year:reqYear, month, date, sort } = req.query;
@@ -231,7 +183,7 @@ const getAllAppointments = async (req, res) => {
 
   const appointments = await Appointment.find(queryObj)
     .populate('customer', '-_id first_name last_name email phone')
-    .select('-_id -creator -createdAt -__v')
+    .select('-creator -createdAt -__v')
     .sort(sortAvailableTime);
 
   res.status(StatusCodes.OK).json({ appointments });
@@ -249,7 +201,53 @@ const getSingleAppointment = async (req, res) => {
   res.status(StatusCodes.OK).json({ appointment });
 };
 
-const updateAppointment = async (req, res) => { res.send('Update appointment');};
+const updateAppointment = async (req, res) => { 
+  const { date, status } = req.body;
+  const {id: appointmentId} = req.params;
+  let today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  
+  const appointment = await Appointment.findById(appointmentId)
+    .populate('customer', '-_id first_name last_name email phone')
+    .select('-creator -createdAt -__v');
+  
+  if(!appointment) {
+    throw new CustomError.BadRequestError(`No appointment with id: ${appointmentId}`);
+  }
+  
+  if(status && !date) {
+    if(appointment.status === 'pending') {
+      appointment.status = status;
+      await appointment.save();
+    }
+    else {
+      throw new CustomError.BadRequestError('Unable to update the status. Please create a new appointment.');
+    }
+  }
+  else if (!status && date) {
+    
+    const calcResult = await appointmentCalculation({
+      date, 
+      today, 
+      user:req.user, 
+      appointmentId: appointment._id, 
+      appointmentAdress: appointment.address.toLowerCase()
+    });
+   
+    appointment.status = 'pending';
+    appointment.date = calcResult.date;
+    appointment.distance = calcResult.distance;
+    appointment.estimatedLeaveTime = calcResult.estimatedLeaveTime;
+    appointment.estimatedAvailableTime = calcResult.estimatedAvailableTime;
+    await appointment.save();
+  }
+  else {
+    throw new CustomError.BadRequestError('Please provide only appointment status or new date.');
+  }
+
+  res.status(StatusCodes.OK).json({ appointment });
+};
 
 const deleteAppointment = async (req, res) => { res.send('Delete appointment');};
 
@@ -295,6 +293,88 @@ const getAppointmentCustomerContactInfo = async ({customer}) => {
 
   return result;
 } ;
+
+const appointmentCalculation = async ({date, today, user, appointmentId, appointmentAdress}) => {
+
+  if(isNaN(new Date(date).getTime())) {
+    throw new CustomError.BadRequestError('Invalid date format. Format must be yyyy-mm-dd');
+  }
+
+  const appointmentDate = new Date(date);
+
+  if(appointmentDate.getTime() < today.getTime()) {
+    throw new CustomError.BadRequestError('You cannot change the appointment date with a past date.');
+  }
+  
+  const lastAppointmentInGivenDate = await Appointment.find({
+    date: appointmentDate,
+    creator: user.userId
+  }).sort('-estimatedAvailableTime').limit(1);
+  
+  let lastAvailableTime = null;
+  const shiftBegin = `${date}T08:00:00.000Z`;
+  const shiftEnd = `${date}T23:59:59.000Z`;
+  
+  if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
+    if((new Date().getTime()) <= (new Date(shiftBegin).getTime())) {
+      lastAvailableTime = new Date(shiftBegin).getTime();
+    }
+    else {
+      lastAvailableTime = new Date(Date.now() + 5*60*1000).getTime(); // 5 minutes later
+    }
+    
+  }
+  else {
+    if(lastAppointmentInGivenDate[0]._id.toString() === appointmentId.toString()) {      
+      lastAvailableTime = lastAppointmentInGivenDate[0].estimatedLeaveTime.getTime();
+      lastAvailableTime += 5 * 60 * 1000;  // 5 minutes later estimated leave 
+    }
+    else {
+      lastAvailableTime = lastAppointmentInGivenDate[0].estimatedAvailableTime;
+      lastAvailableTime = lastAvailableTime.getTime();
+    }
+  }
+  
+  const locationString = await getLatitudeLongitude([OFFICE_CODE, appointmentAdress]);
+  
+  const office = locationString[OFFICE_CODE].split(',').join('%2C');
+  const appointmentPlace = locationString[appointmentAdress].split(',').join('%2C');
+  
+  const offsetTime = 15 * 60; // 15 minutes;
+  const leaveTimeFromOffice = offsetTime + Math.floor( lastAvailableTime / 1000); // time in seconds
+  const appointmentDuration = 60 * 60; // 1 hour in seconds
+  
+  const departure = await getDistanceAndTime({ 
+    origin: office, 
+    destination: appointmentPlace, 
+    departureTime: leaveTimeFromOffice
+  });
+  
+  const arrival = await getDistanceAndTime({
+    origin: appointmentPlace,
+    destination: office,
+    departureTime: (leaveTimeFromOffice + departure.duration + appointmentDuration)
+  });
+
+  const availableTimeAtOffice = ( leaveTimeFromOffice + 
+    departure.duration + 
+    appointmentDuration + 
+    arrival.duration
+  );
+  
+  const shiftEndingTime = new Date(shiftEnd).getTime();
+  
+  if((availableTimeAtOffice*1000) > shiftEndingTime) {
+    throw new CustomError.BadRequestError('Date is not available for appointment. Please choose another date.');
+  }
+
+  return {
+    date: appointmentDate,
+    distance: departure.distance.text,
+    estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
+    estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
+  };
+}
 
 module.exports = {
   createAppointment,

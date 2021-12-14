@@ -50,14 +50,47 @@ const createAppointment = async (req, res) => {
     throw new CustomError.BadRequestError(customerContact.error)
   }
 
+  const tempDate = new Date(date);
+  if(isNaN(tempDate.getTime())) {
+    throw new CustomError.BadRequestError('Invalid date format. Format must be yyyy-mm-dd');
+  }
+
+  const cancelledAppointments = await Appointment.find({
+    status: 'cancelled',
+    date: tempDate,
+    creator: req.user.userId,
+  })
+
   // Appointment Creation Part, working on the scenario 
-  const calcResult = await appointmentCalculation({
-    date, 
-    today, 
-    user:req.user, 
-    appointmentId: null, 
-    appointmentAdress: postcode
-  });
+  let calcResult = {
+    status: false
+  };
+  
+  for(let i=0; i < cancelledAppointments.length; i++) {
+    calcResult = await appointmentCalculation({
+      date, 
+      today, 
+      user:req.user, 
+      appointmentId: null, 
+      appointmentAdress: postcode,
+      availableTime: cancelledAppointments[i].estimatedLeaveTime
+    });
+
+    if(calcResult.status) {
+      break;
+    }
+  }
+
+  if(!calcResult.status) {
+    calcResult = await appointmentCalculation({
+      date, 
+      today, 
+      user:req.user, 
+      appointmentId: null, 
+      appointmentAdress: postcode,
+      availableTime: null
+    });
+  }
 
   // Check is there a pending appointment for the customer and address
   const pendingAppointment = await Appointment.findOne({
@@ -183,7 +216,6 @@ const getAllAppointments = async (req, res) => {
 
   const appointments = await Appointment.find(queryObj)
     .populate('customer', '-_id first_name last_name email phone')
-    .select('-creator -createdAt -__v')
     .sort(sortAvailableTime);
 
   res.status(StatusCodes.OK).json({ appointments });
@@ -302,8 +334,9 @@ const getAppointmentCustomerContactInfo = async ({customer}) => {
   return result;
 } ;
 
-const appointmentCalculation = async ({date, today, user, appointmentId, appointmentAdress}) => {
-
+const appointmentCalculation = async (
+    { date, today, user, appointmentId, appointmentAdress, availableTime }
+  ) => {
   if(isNaN(new Date(date).getTime())) {
     throw new CustomError.BadRequestError('Invalid date format. Format must be yyyy-mm-dd');
   }
@@ -311,44 +344,65 @@ const appointmentCalculation = async ({date, today, user, appointmentId, appoint
   const appointmentDate = new Date(date);
 
   if(appointmentDate.getTime() < today.getTime()) {
-    throw new CustomError.BadRequestError('You cannot change the appointment date with a past date.');
+    throw new CustomError.BadRequestError('You cannot set the appointment date with a past date.');
   }
-  
-  const lastAppointmentInGivenDate = await Appointment.find({
-    date: appointmentDate,
-    creator: user.userId
-  }).sort('-estimatedAvailableTime').limit(1);
-  
+  // availableTime
+  let lastAppointmentInGivenDate = [];
+  if(availableTime) {
+    const cancelledAppointment = await Appointment.findOne({
+      date: appointmentDate,
+      creator: user.userId,
+      estimatedLeaveTime: new Date(availableTime)
+    });
+
+    if(cancelledAppointment) {
+      lastAppointmentInGivenDate.push(cancelledAppointment);
+    }
+  }
+  else {
+    lastAppointmentInGivenDate = await Appointment.find({
+      date: appointmentDate,
+      creator: user.userId
+    }).sort('-estimatedAvailableTime').limit(1);
+  }  
+
   let lastAvailableTime = null;
   const shiftBegin = `${date}T08:00:00.000Z`;
   const shiftEnd = `${date}T23:59:59.000Z`;
-  
-  if(!lastAppointmentInGivenDate || !lastAppointmentInGivenDate.length){
+  const offsetTime = 15 * 60; // 15 minutes;
+
+  if(!lastAppointmentInGivenDate.length){
     if((new Date().getTime()) <= (new Date(shiftBegin).getTime())) {
       lastAvailableTime = new Date(shiftBegin).getTime();
     }
     else {
       lastAvailableTime = new Date(Date.now() + 5*60*1000).getTime(); // 5 minutes later
     }
-    
   }
   else {
-    if(lastAppointmentInGivenDate[0]._id.toString() === appointmentId.toString()) {      
+    if(appointmentId && lastAppointmentInGivenDate[0]._id.toString() === appointmentId.toString()) {      
       lastAvailableTime = lastAppointmentInGivenDate[0].estimatedLeaveTime.getTime();
       lastAvailableTime += 5 * 60 * 1000;  // 5 minutes later estimated leave 
     }
     else {
-      lastAvailableTime = lastAppointmentInGivenDate[0].estimatedAvailableTime;
-      lastAvailableTime = lastAvailableTime.getTime();
+      if(availableTime) {
+        lastAvailableTime = lastAppointmentInGivenDate[0].estimatedLeaveTime;
+        lastAvailableTime = lastAvailableTime.getTime() - offsetTime*1000;
+      }
+      else {
+        lastAvailableTime = lastAppointmentInGivenDate[0].estimatedAvailableTime;
+        lastAvailableTime = lastAvailableTime.getTime();
+      }
+      
     }
   }
-  
+
   const locationString = await getLatitudeLongitude([OFFICE_CODE, appointmentAdress]);
   
   const office = locationString[OFFICE_CODE].split(',').join('%2C');
   const appointmentPlace = locationString[appointmentAdress].split(',').join('%2C');
   
-  const offsetTime = 15 * 60; // 15 minutes;
+  
   const leaveTimeFromOffice = offsetTime + Math.floor( lastAvailableTime / 1000); // time in seconds
   const appointmentDuration = 60 * 60; // 1 hour in seconds
   
@@ -376,12 +430,26 @@ const appointmentCalculation = async ({date, today, user, appointmentId, appoint
     throw new CustomError.BadRequestError('Date is not available for appointment. Please choose another date.');
   }
 
-  return {
-    date: appointmentDate,
-    distance: departure.distance.text,
-    estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
-    estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
-  };
+  const appointmentConflict = await Appointment.findOne({
+    estimatedLeaveTime: {
+      $gte : new Date(leaveTimeFromOffice*1000),
+      $lte:new Date(availableTimeAtOffice*1000)
+    },
+    status: 'pending'
+  });
+  
+  if(appointmentConflict) {
+    return { status: false };
+  }
+  else {
+    return {
+      status: true,
+      date: appointmentDate,
+      distance: departure.distance.text,
+      estimatedLeaveTime: new Date(leaveTimeFromOffice*1000),
+      estimatedAvailableTime: new Date(availableTimeAtOffice*1000)
+    };
+  }
 }
 
 module.exports = {

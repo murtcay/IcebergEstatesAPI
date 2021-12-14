@@ -208,7 +208,7 @@ const updateAppointment = async (req, res) => {
   today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   
-  const appointment = await Appointment.findById(appointmentId)
+  const appointment = await Appointment.findOne({_id:appointmentId})
     .populate('customer', '-_id first_name last_name email phone')
     .select('-creator -createdAt -__v');
   
@@ -249,7 +249,15 @@ const updateAppointment = async (req, res) => {
   res.status(StatusCodes.OK).json({ appointment });
 };
 
-const deleteAppointment = async (req, res) => { res.send('Delete appointment');};
+const deleteAppointment = async (req, res) => { 
+  const {id: appointmentId} = req.params;  
+  const appointment = await Appointment.findOneAndDelete({ _id: appointmentId});
+  
+  if(!appointment) {
+    throw new CustomError.BadRequestError(`No appointment with id: ${appointmentId}`);
+  }
+  res.status(StatusCodes.OK).send('The appointment is successfully deleted.');
+};
 
 const getAppointmentCustomerContactInfo = async ({customer}) => {
   const result = {};

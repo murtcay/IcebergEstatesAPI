@@ -2,10 +2,13 @@ const axios = require('axios');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 
+const POSTCODE_API_HOST = 'http://api.postcodes.io';
+const GOOGLE_MAPS_DISTANCE_MATRIX_API_HOST = 'https://maps.googleapis.com/maps/api/distancematrix/'
+
 const getDistanceAndTime = async ({origin, destination, departureTime}) => {
   const {data: maps} = await axios({
     method: 'get',
-    url: `${process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_HOST}json?origins=${origin}&destinations=${destination}&departure_time=${departureTime}&key=${process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY}`
+    url: `${GOOGLE_MAPS_DISTANCE_MATRIX_API_HOST}json?origins=${origin}&destinations=${destination}&departure_time=${departureTime}&key=${process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY}`
   });
 
   let normal_duration = maps.rows[0].elements[0].duration.value;
@@ -27,7 +30,7 @@ const getLocationInformations = async (addressArr) => {
   
   const { data: locations} = await axios({
     method: 'post',
-    url: `${process.env.POSTCODE_API_HOST}/postcodes`,
+    url: `${POSTCODE_API_HOST}/postcodes`,
     data: {
       postcodes: addressArr
     }
@@ -65,7 +68,7 @@ const getLatitudeLongitude = async (addressArr) => {
 const postcodeValidate = async (postcode) => {
   const {data: isValid} = await axios({
     method: 'get',
-    url: `${process.env.POSTCODE_API_HOST}/postcodes/${postcode}/validate`
+    url: `${POSTCODE_API_HOST}/postcodes/${postcode}/validate`
   })
 
   if(!isValid.result) {

@@ -30,7 +30,14 @@ const updateUser = async (req, res) => {
     throw new CustomError.BadRequestError('Please provide all values.');
   }
 
-  const user = await User.findOne({ _id: req.user.userId });
+  const user = await User.findOne({ _id: req.params.id });
+  
+  if(!user) {
+    throw new CustomError.BadRequestError(`No user with id: ${req.params.id}`);
+  }
+
+  checkPermissions(req.user, user._id);
+
   user.name = name;
   user.email = email;
 
@@ -49,7 +56,13 @@ const updateUserPassword = async (req, res) => {
     throw new CustomError.BadRequestError('Please provide both values');
   }
 
-  const user = await User.findOne({ _id: req.user.userId });
+  const user = await User.findOne({ _id: req.params.id });
+  
+  if(!user) {
+    throw new CustomError.BadRequestError(`No user with id: ${req.params.id}`);
+  }
+
+  checkPermissions(req.user, user._id);
 
   const isPasswordCorrect = await user.comparePassword(oldPassword);
 

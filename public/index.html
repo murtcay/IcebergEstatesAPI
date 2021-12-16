@@ -17,9 +17,9 @@
       </div>
       <div class="col-md-12">
         <div class="col-md-3">
-          <ul>
+          <ul style="list-style-type:disc;">
             <li><strong><a href="#Appointments">Appointments</a></strong>
-              <ul>
+              <ul style="list-style-type:circle;">
                 <li><a class="endpoint_menu" href="#jump-Appointments-CreateAppointment">Create Appointment</a>
                 <li><a class="endpoint_menu" href="#jump-Appointments-DeleteAppointment">Delete Appointment</a>
                 <li><a class="endpoint_menu" href="#jump-Appointments-GetAllAppointments">Get All Appointments</a>
@@ -27,20 +27,20 @@
                 <li><a class="endpoint_menu" href="#jump-Appointments-UpdateAppointment">Update Appointment</a>
               </ul>
             <li><strong><a href="#Auth">Auth</a></strong>
-              <ul>
+              <ul style="list-style-type:circle;">
                 <li><a class="endpoint_menu" href="#jump-Auth-LoginUser">Login User</a>
                 <li><a class="endpoint_menu" href="#jump-Auth-LogoutUser">Logout User</a>
                 <li><a class="endpoint_menu" href="#jump-Auth-RegisterUser">Register User</a>
               </ul>
             <li><strong><a href="#Contacts">Contacts</a></strong>
-              <ul>
+              <ul style="list-style-type:circle;">
                 <li><a class="endpoint_menu" href="#jump-Contacts-CreateContact">Create Contact</a>
                 <li><a class="endpoint_menu" href="#jump-Contacts-GetAllContacts">Get All Contacts</a>
                 <li><a class="endpoint_menu" href="#jump-Contacts-GetSingleContact">Get Single Contact</a>
                 <li><a class="endpoint_menu" href="#jump-Contacts-UpdateContact">Update Contact</a>
               </ul>
             <li><strong><a href="#Users">Users</a></strong>
-              <ul>
+              <ul style="list-style-type:circle;">
                 <li><a class="endpoint_menu" href="#jump-Users-GetAllUsers">Get All Users</a>
                 <li><a class="endpoint_menu" href="#jump-Users-GetSingleUser">Get Single User</a>
                 <li><a class="endpoint_menu" href="#jump-Users-UpdateUser">Update User</a>
@@ -58,10 +58,12 @@
             <div class="panel-body">
               <p>
                 Users working in this company can perform some CRUD operations, such as
-                <li>get the list of appointments</li>
-                <li>get single appointment information by appointment id</li>
-                <li>update appointment date or status</li>
-                <li>delete an appointment with the given id</li>
+                <ul style="list-style-type:disc;">
+                  <li>get the list of appointments</li>
+                  <li>get single appointment information by appointment id</li>
+                  <li>update appointment date or status</li>
+                  <li>delete an appointment with the given id</li>
+                </ul>
               </p>
               <p>
                 <span><b>Note:</b></span><br>
@@ -263,12 +265,12 @@
             <div class="panel-body">
               <p>
                 CRUD operations endpoint, it is accessible by only admin.
-              <ul>
-                <li>manually create a customer
-                <li>get the list of all customers contact information
-                <li>get single customer contact information by contact id
-                <li>update customer contact information
-              </ul>
+                <ul style="list-style-type:disc;">
+                  <li>manually create a customer
+                  <li>get the list of all customers contact information
+                  <li>get single customer contact information by contact id
+                  <li>update customer contact information
+                </ul>
               </p>
               <div class="request-item">
                 <div class="panel-group" id="accordion-Contacts">
@@ -364,13 +366,13 @@
               <ol>
                 <li>
                   Only admin can perform:
-                  <ul>
+                  <ul style="list-style-type:disc;">
                     <li>get the list of all users</li>
                   </ul>
                 </li>
                 <li>
                   Only admin and the user who is logged in can perform
-                  <ul>
+                  <ul style="list-style-type:disc;">
                     <li>get single users information by user id</li>
                     <li>update user information</li>
                     <li>update user password</li>
@@ -472,7 +474,7 @@
             title="If the application help you, please feel free to give a star to the project in github. Your star inspire me to work more on open-source projects like this!">Made
             with <em class="love-color">&#9829;</em> by <a href="https://github.com/thedevsaddam" target="_blank"
               class="text-muted">thedevsaddam</a> | Generated at: 2021-12-15 21:48:32 by <a
-              href="https://github.com/thedevsaddam/docgen" target="_blank" class="text-muted>"docgen</a></span></div>
+              href="https://github.com/thedevsaddam/docgen" target="_blank" class="text-muted">docgen</a></span></div>
       </div>
     </footer>
 </body>
